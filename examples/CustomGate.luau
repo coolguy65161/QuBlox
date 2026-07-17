@@ -4,7 +4,7 @@ local QuBlox = require(ReplicatedStorage.QuBlox)
 local Gates = require(ReplicatedStorage.QuBlox.Gates)
 local Matrices = require(ReplicatedStorage.QuBlox.Matrices)
 
-function Gates.Custom(parameter)
+function Gates.MyGate(parameter)
 	local gate
 	if parameter == 1 then
 		gate = Gates.I()
@@ -15,8 +15,8 @@ function Gates.Custom(parameter)
 	return gate
 end
 
-function QuBlox:Custom(index, param)
-	local gateTable = self:gate('Custom', {index}, {param}) -- 'GateName', {index1, index2, ...}, {param1, param2, ...}
+function QuBlox:MyGate(index, param)
+	local gateTable = self:gate('MyGate', {index}, {param}) -- 'GateName', {index1, index2, ...}, {param1, param2, ...}
 	table.insert(self.gates, gateTable)
 end
 
