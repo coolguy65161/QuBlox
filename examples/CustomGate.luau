@@ -20,9 +20,10 @@ function QuBlox:MyGate(index, param)
 	table.insert(self.gates, gateTable)
 end
 
-local Circuit = QuBlox.Circuit(1, 1)
+local Circuit = QuBlox.Circuit(2, 2)
 
-Circuit:Custom(1, 1)
+Circuit:MyGate(1, 1)
+Circuit:MyGate(2, 2)
 
 local results = Circuit:results(100000)
 
