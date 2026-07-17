@@ -1,3 +1,4 @@
+-- Will be updated in the future to be more user friendly
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local QuBlox = require(ReplicatedStorage.QuBlox)
