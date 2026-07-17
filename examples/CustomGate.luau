@@ -1,4 +1,3 @@
--- Will be updated in the future to be more user friendly
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local QuBlox = require(ReplicatedStorage.QuBlox)
@@ -6,20 +5,14 @@ local Gates = require(ReplicatedStorage.QuBlox.Gates)
 local Matrices = require(ReplicatedStorage.QuBlox.Matrices)
 
 function Gates.Custom(parameter)
-	local array
+	local gate
 	if parameter == 1 then
-		array = {
-			{1, 0},
-			{0, 1}
-		}
+		gate = Gates.I()
 	elseif parameter == 2 then
-		array = {
-			{0, 1},
-			{1, 0}
-		}
+		gate = Gates.X()
 	end
 	
-	return Matrices.new(array)
+	return gate
 end
 
 function QuBlox:Custom(index, param)
