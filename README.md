@@ -7,4 +7,4 @@ An open source quantum computing simulator built for Roblox.
 You can find this on the Roblox marketplace at: (No link yet)
 
 ## Where can I find the API documentation?
-You can find the API at api.md
+You can find the API at api.md in the /root folder
