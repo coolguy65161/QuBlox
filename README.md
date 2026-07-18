@@ -1,4 +1,4 @@
-# QuBlox
+# QuBlox (or QuantumBlox)
 
 ## What is this?
 
