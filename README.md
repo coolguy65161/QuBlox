@@ -49,6 +49,15 @@ Expected output:
 11111 ≈ 50%
 ```
 
+## Features
+- State vector simulation
+- Complex amplitude support
+- Quantum gate system
+- Circuit execution
+- Measurement sampling
+- Custom gate support
+- Matrix and tensor operations
+
 ## Additional Information
 
 > QuBlox uses big endian display ordering.
