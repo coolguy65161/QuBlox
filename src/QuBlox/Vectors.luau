@@ -13,21 +13,13 @@ function module.Vector(x)
 	return Matrices.new(matrix)
 end
 
-function module.Qubit(x)
-	if x == 0 then
-		return Matrices.new({{1},{0}})
-	elseif x == 1 then
-		return Matrices.new({{0},{1}})
-	end
+function module.Qubit()
+	return {}
 end
 
 function module.StateVector(qubits)
-	local qubit = qubits[1]
-	
-	for i = 2, #qubits do
-		qubit = qubit:Tensor(qubits[i])
-	end
-	
-	return qubit
+	local matrix = Matrices.CreateMatrix(2^#qubits, 1)
+	matrix:Set(1,1,1,0)
+	return matrix
 end
 return module
