@@ -70,89 +70,91 @@ function module.CreateMatrix(x, y)
 end
 
 function module.__mul(a, b)
+	local readf64 = buffer.readf64
+	local writef64 = buffer.writef64
 
-	if typeof(a) == "number" then --multiplies all rows by the scalar
-		local result = module.CreateMatrix(b.rows, b.columns)
 
-		for row = 1, b.rows do
-			for col = 1, b.columns do
-				local real, imag = b:Get(row, col)
+	if typeof(a) == "number" then
 
-				result:Set(
-					row,
-					col,
-					real * a,
-					imag * a
-				)
-			end
+		local result = BufferMatrix.CreateBuffer(b.rows, b.columns)
+
+		local b_buf = b.matrix.buffer
+		local res_buf = result.buffer
+
+		local totalElements = b.rows * b.columns
+		local index = 0 
+
+		for i = 1, totalElements do
+
+			local real = readf64(b_buf, index)
+			local imag = readf64(b_buf, index + 8)
+
+			writef64(res_buf, index, real * a)
+			writef64(res_buf, index + 8, imag * a)
+
+			index += 16 
 		end
 
-		return result
+		return module.new(result)
 	end
 
-	if typeof(a) == "table" and typeof(b) == "table" then --two matrices
-
-		local ax, ay = a:Size()
-		local bx, by = b:Size()
+	if typeof(a) == "table" and typeof(b) == "table" then
+		local ax, ay = a.rows, a.columns
+		local bx, by = b.rows, b.columns
 
 		if ay ~= bx then
 			warn("product undefined: columns of A must match rows of B")
 			return
 		end
 
-		local c = module.CreateMatrix(ax, by)
+		local c = BufferMatrix.CreateBuffer(ax, by)
 
-		for row = 1, ax do
+		local a_buf = a.matrix.buffer
+		local b_buf = b.matrix.buffer
+		local c_buf = c.buffer
 
-			for col = 1, by do
+		local a_stride = a.columns * 16
+		local b_stride = b.columns * 16
 
+		local c_index = 0 
+
+		for row = 0, ax - 1 do
+			local a_row_start = row * a_stride
+
+			for col = 0, by - 1 do
 				local realSum = 0
 				local imagSum = 0
 
+				local a_index = a_row_start
+
+				local b_index = col * 16
+
 				for k = 1, ay do
+					local ar = readf64(a_buf, a_index)
+					local ai = readf64(a_buf, a_index + 8)
 
-					local ar, ai = a:Get(row, k)
-					local br, bi = b:Get(k, col)
+					local br = readf64(b_buf, b_index)
+					local bi = readf64(b_buf, b_index + 8)
 
-					local mr, mi = Complex.multiply(ar, ai, br, bi)
+					realSum += (ar * br) - (ai * bi)
+					imagSum += (ar * bi) + (ai * br)
 
-					realSum += mr
-					imagSum += mi
+					a_index += 16 
+
+					b_index += b_stride 
 				end
 
-				c:Set(
-					row,
-					col,
-					realSum,
-					imagSum
-				)
+				writef64(c_buf, c_index, realSum)
+				writef64(c_buf, c_index + 8, imagSum)
+				c_index += 16 
 			end
 		end
 
-		return c
+		return module.new(c)
 	end
-
 
 	warn("unrecognized type")
 end
---not buffer'd
---[[function module:ConjTranspose()
-	local matrix = self.matrix
-	for row = 1, #matrix do
-		for column = 1, #matrix[1] do
-			matrix[row][column] = Complex.conj(matrix[row][column])
-		end
-	end
-	
-	local new = {}
-	for row = 1, #matrix[1] do
-		new[row] = {}
-		for column = 1, #matrix do
-			new[row][column] = matrix[column][row]
-		end
-	end
-	self.matrix = new
-end--]]
 
 function module:Tensor(other)
 
