@@ -37,6 +37,7 @@ function module.Circuit(qubits, clbits)
 		table.insert(circuit.clbits, '0')
 	end
 	
+	
 	circuit.state = Vectors.StateVector(circuit.qubits)
 	
 
@@ -275,7 +276,7 @@ function module:GetMultiMatrix()
 	else
 	
 		local matrix = operations[1].matrix:ExpandGate(operations[1], qubits) 
-
+		local t = tick()
 		if #operations > 1 then
 			for i = 1, #operations - 1 do
 				local gate = operations[i + 1]
@@ -292,13 +293,11 @@ function module:UpdateStateVector() --its name
 
 	local state = self.state
 	local qubits = self.qubits
-	
 	local circMatrix = self:GetCircuitMatrix()
-
+	--circMatrix = Matrices.new(circMatrix)
 	local newState = circMatrix * state
-	
-	self.state = newState
 
+	self.state = newState
 	self.gates = {}
 end
 function module:GetTensorMatrix()
@@ -332,12 +331,13 @@ function module:GetTensorMatrix()
 end
 
 function module:GetCircuitMatrix() --for updatestatevector()
-
+	local t = tick()
 	local tensMatrix = self:GetTensorMatrix()
 
 	local multiMatrix = self:GetMultiMatrix()
 
-	local circuitMatrix = multiMatrix * tensMatrix
+	local circuitMatrix = multiMatrix * tensMatrix --optimize this to the mooooonn
+	
 	return circuitMatrix
 end
 
