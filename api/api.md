@@ -31,7 +31,7 @@ Complete API documentation for QuBlox.
 
 # Creating a Circuit
 
-## `QuBlox.new(qubits, clbits)`
+## `QuBlox.Circuit(qubits, clbits)`
 
 Creates a new quantum circuit.
 
@@ -79,7 +79,7 @@ circuit:h(3)
 ## `circuit:i(qubitIndex)`
 Applies the Identity gate to a qubit.
 ## `circuit:h(qubitIndex)`
-Applies the Haddamard gate to a qubit.
+Applies the Hadamard gate to a qubit.
 ## `circuit:x(qubitIndex)`
 Applies the Pauli-X gate to a qubit.
 ## `circuit:y(qubitIndex)`
