@@ -10,8 +10,8 @@ created by coolguy65161
 local module = {}
 module.__index = module
 
+local DirectGate = require(script.DirectGate)
 local Matrices = require(script.Matrices)
-local Vectors = require(script.Vectors)
 local Gates = require(script.Gates)
 local Complex = require(script.Complex)
 local BufferMatrix = require(script.Matrices.BufferMatrix)
@@ -19,27 +19,27 @@ local BufferMatrix = require(script.Matrices.BufferMatrix)
 function module.new()
 	local circuit = {}
 	setmetatable(circuit, module)
-	
-	circuit.qubits = {} --remove this later!!! not optimal
+	circuit.qubits = 0
 	circuit.clbits = {}
 	circuit.gates = {}
 	circuit.state = {}
 	return circuit
 end
 
+function module.StateVector(qubits)
+	local matrix = Matrices.CreateMatrix(2^qubits, 1)
+	matrix:Set(1,1,1,0)
+	return matrix
+end
+
 function module.Circuit(qubits, clbits)
 	local circuit = module.new()
-	
-	for i = 1, qubits do
-		table.insert(circuit.qubits, Vectors.Qubit(0)) --removethislaterrememberpls
-	end
+	circuit.qubits = qubits
 	for i = 1, clbits do
 		table.insert(circuit.clbits, '0')
 	end
 	
-	
-	circuit.state = Vectors.StateVector(circuit.qubits)
-	
+	circuit.state = module.StateVector(circuit.qubits)
 
 	return circuit
 end
@@ -74,7 +74,7 @@ function module:results(shots)
 		--resets the state to the old state vector so it can do the same thing
 		--without caching the whole matrix
 		
-		local bitstring = self:CacheMeasure(probCache)
+		local bitstring = string.reverse(self:CacheMeasure(probCache))
 		chanceTable[bitstring] = (chanceTable[bitstring] or 0) + 1
 	end
 
@@ -83,7 +83,7 @@ function module:results(shots)
 	--this old code is unoptimized but i might need it in the future
 	
 	--[[local oldStateVector = CloneMatrix(self.state)
-	local qubits = #self.qubits
+	local qubits = self.qubits
 
 	local chanceTable = {} --like qiskit outputs the bit string and how many shots
 	for i = 1, shots do
@@ -117,7 +117,7 @@ local function NumberToBits(number, qubits)
 end
 
 function module:CacheMeasure(cache)
-	local qubits = #self.qubits
+	local qubits = self.qubits
 	local probabilities = cache or self:CacheStateProbabilites()
 
 	local random = math.random()
@@ -141,7 +141,7 @@ end
 function module:CacheStateProbabilites()
 	local epsilon = 1e-10
 
-	local qubit = #self.qubits
+	local qubit = self.qubits
 	local probabilities = {}
 	local total = 0
 
@@ -183,8 +183,9 @@ function module:applySingleQubit(gate, qubit)
 	local g12r, g12i = gate:Get(1,2)
 	local g21r, g21i = gate:Get(2,1)
 	local g22r, g22i = gate:Get(2,2)
-
+	
 	for i = 0, size-1, step*2 do
+
 		for j = 0, step-1 do
 
 			local index1 = i+j+1
@@ -267,7 +268,7 @@ function module:applyMultiQubit(gate, qubits)
 	local output = {}
 
 	for i = 0, stateSize-1 do
-
+	
 		if bit32.band(i, mask) == 0 then
 
 			local baseIndex = i + 1
@@ -342,9 +343,9 @@ end
 
 ------ STATE VECTOR CALCULATIONS ------
 function module:UpdateStateVector()
-	
-	for _, operation in ipairs(self.gates) do
 
+	for _, operation in ipairs(self.gates) do
+		task.wait()
 		local matrix = operation.matrix
 		local indices = operation.indices
 
@@ -356,11 +357,15 @@ function module:UpdateStateVector()
 			)
 
 		else
-
-			self:applyMultiQubit(
-				matrix,
-				indices
-			)
+			if DirectGate[operation.gateName] then
+				DirectGate[operation.gateName](self, indices)
+			else
+				
+				self:applyMultiQubit(
+					matrix,
+					indices
+				)
+			end
 
 		end
 	end
@@ -467,23 +472,12 @@ function module:rz(index, theta)
 end
 -- for multiple gate matrices
 
-function module:returnI(index) --im not sure what i used this for but i needed it
-	local qubit = self.qubits[index]
-
-	local gateTable = {
-		indices = {index},	
-		matrix = Gates.I().matrix,
-		gateName = 'I'
-	}
-	
-	return gateTable
-end
 ------ MEASURE ------
 --im not entirely sure what i was doing this and it works but i will try hard to explain
 function module:measure(qubitIndex, clbitIndex)
 
 	local amplitudes = self.state
-	local qubitCount = #self.qubits
+	local qubitCount = self.qubits
 
 	local probabilities = { --initializes probabilities
 		[0] = 0,
