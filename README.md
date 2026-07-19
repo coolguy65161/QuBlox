@@ -10,7 +10,11 @@ It provides state vector simulation, quantum gates, measurements, and support fo
 
 You can find QuBlox on the Roblox Creator Store:
 
-[QuBlox](https://create.roblox.com/store/asset/128728018797616/QuBlox)
+[QuBlox - Roblox Creator Store](https://create.roblox.com/store/asset/128728018797616/QuBlox)
+
+Or in the latest release:
+
+[QuBlox v1.1 - Github](https://github.com/coolguy65161/QuBlox/releases/tag/v1.1)
 
 ## API Documentation
 
@@ -58,12 +62,28 @@ Expected output:
 - Custom gate support
 - Matrix and tensor operations
 
-## Additional Information
+---
 
-> QuBlox uses big endian display ordering.
->
-> Quantum noise simulation has not been implemented.
->
-> Not all gates have been fully tested.
->
-> API documentation is still being expanded.
+# QuBlox v1.1 - Latest Version
+
+## Changes
+- Updated Statevector creation
+- Replaced Circuit.qubits with empty table objects for now
+- Limit is now 9 qubits due to matrix multiplication optimizations
+- Removed Conjugate Transpose
+- Matrix multiplication and gate expansion are soon to be obsolete
+- Vector.Qubit(0 or 1) now returns {}
+
+## Benchmarks
+Example:
+- 7-qubit GHZ state
+- 500,000 measurements
+- ~1.5 seconds
+
+Example:
+- 5-qubit GHZ state
+- 1,000 measurements
+- ~24.6 milliseconds
+
+## Additional Information
+> Roblox took down the original QuBlox v1.0, and other reuploads. For now you will have to download directly from the release page at [Release QuBlox v1.1 · coolguy65161/QuBlox](https://github.com/coolguy65161/QuBlox/releases/tag/v1.1)
