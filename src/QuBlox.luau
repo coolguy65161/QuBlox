@@ -61,8 +61,9 @@ local function CloneMatrix(matrix) --im not sure if this is entirely optimal, i 
 end
 
 function module:results(shots)
+	local t = tick()
 	self:run() -- update state vector
-
+	print('Time to update the state vector:', tick() - t)
 	local probCache = self:CacheStateProbabilites()
 
 	local chanceTable = {} --like qiskit outputs the bit string and how many shots
@@ -169,72 +170,8 @@ function module:CacheStateProbabilites()
 end
 
 
-function module:UpdateStateVector() --its name
-
-	local state = self.state
-	local qubits = self.qubits
-	--local circMatrix = self:GetCircuitMatrix()
-	self:UpdateSingularState()
-	self.gates = {}
-end
-
 --- OPERATIONS ------
 
---thanks for this function lol my other solution sucked
-local function removeDuplicateGates(operations)
-	local uniqueGates = {}
-	local result = {}
-
-	for _, gate in ipairs(operations) do
-
-		local indicesCopy = {table.unpack(gate.indices)}
-		table.sort(indicesCopy)
-
-		local signature = gate.gateName .. "_" .. table.concat(indicesCopy, ",") --caches the name and indices to remove other similar one
-
-		if not uniqueGates[signature] then
-			uniqueGates[signature] = true
-			table.insert(result, gate)
-		end
-	end
-
-	table.clear(operations)
-	for _, gate in ipairs(result) do
-		table.insert(operations, gate)
-	end
-
-end
-
-local function findMultiGates(gates) --same as single
-	local operations = {}
-
-	for i = 1, #gates do 
-		local gate = gates[i]
-		local indices = gate.indices
-		if #indices > 1 then
-			table.insert(operations, gate)
-		end
-	end
-
-	return operations
-end
-
-local function findSingleGates(qubit, gates) --finds gates with one indice to use in the tensor operation
-	--this function can be simplified to multigate solution 
-	local operations = {}
-
-	for _, gate in ipairs(gates) do
-		local indices = gate.indices
-		if #indices == 1 then
-			for _, index in ipairs(indices) do --if same index put into operationn
-				if index == qubit then
-					table.insert(operations, gate) -- {gateName = gate.gateName, indices = gate.indices, params = gate.params}
-				end
-			end
-		end
-	end
-	return operations
-end
 
 --thanks for this code as well
 function module:applySingleQubit(gate, qubit)
@@ -282,89 +219,152 @@ function module:applySingleQubit(gate, qubit)
 		end
 	end
 end
+--i stole this off the internet
+local function getIndex(base, qubits, localIndex)
 
-function module:GetSingleOperations()
+	local index = base
 
-	local gates = self.gates
-	local qubits = self.qubits
+	for i = 1, #qubits do
 
-	local tensOperation = {}
+		local bit = bit32.band(
+			localIndex,
+			2^(i-1)
+		)
 
-	for i = 1, #qubits do 
-		local qubit = qubits[i]
-
-		local operations = findSingleGates(i, gates) 
-
-		local quOperations = {}
-
-		if #operations ~= 0 then
-			for _, gate in operations do
-				table.insert(quOperations, gate)
-			end
+		if bit ~= 0 then
+			index = bit32.bor(
+				index,
+				2^(qubits[i]-1)
+			)
+		else
+			index = bit32.band(
+				index,
+				bit32.bnot(2^(qubits[i]-1))
+			)
 		end
-
-		table.insert(tensOperation, quOperations) 
 	end
 
-	return tensOperation
+	return index + 1
 end
-function module:GetMultiOperations() --this was really simple idk if i can apply this to GetTensorOperations
-	local gates = self.gates
+--thx ai lol
+function module:applyMultiQubit(gate, qubits)
+	local stateSize = self.state.matrix.rows
+	local gateSize = gate.rows -- 4, 8, 16, etc.
 
-	local multiOperations = findMultiGates(gates)
-	removeDuplicateGates(multiOperations)
+	local orderedQubits = {}
+	for i = #qubits, 1, -1 do
+		table.insert(orderedQubits, qubits[i])
+	end
 
-	return multiOperations
+	local mask = 0
+	for _, q in ipairs(orderedQubits) do
+
+		mask = bit32.bor(mask, bit32.lshift(1, q - 1))
+	end
+
+	-- temporary storage
+	local input = {}
+	local output = {}
+
+	for i = 0, stateSize-1 do
+
+		if bit32.band(i, mask) == 0 then
+
+			local baseIndex = i + 1
+
+			-- Get affected amplitudes
+			for j = 0, gateSize-1 do
+
+				-- Note we pass orderedQubits here instead of qubits
+				local stateIndex = getIndex(
+					baseIndex-1,
+					orderedQubits,
+					j
+				)
+
+				local r, im = self.state:Get(stateIndex, 1)
+
+				input[j] = {
+					r,
+					im
+				}
+			end
+
+			-- Matrix multiply gate * vector
+			for row = 1, gateSize do
+				local realSum = 0
+				local imagSum = 0
+
+				for col = 1, gateSize do
+					local gr, gi = gate:Get(row,col)
+
+					local ar = input[col-1][1]
+					local ai = input[col-1][2]
+
+					local mr, mi = Complex.multiply(
+						gr,
+						gi,
+						ar,
+						ai
+					)
+
+					realSum += mr
+					imagSum += mi
+				end
+				output[row] = {
+					realSum,
+					imagSum
+				}
+			end
+
+			-- Write results back
+			for j = 0, gateSize-1 do
+
+				-- Again, use orderedQubits
+				local stateIndex = getIndex(
+					baseIndex-1,
+					orderedQubits,
+					j
+				)
+
+				self.state:Set(
+					stateIndex,
+					1,
+					output[j+1][1],
+					output[j+1][2]
+				)
+			end
+
+		end -- end bitmask check
+	end
 end
+
+
 ------ STATE VECTOR CALCULATIONS ------
-function module:UpdateSingularState()
-	local singleOp = self:GetSingleOperations()
-
-	for index, operations in ipairs(singleOp) do
-		for _, operation in ipairs(operations) do
-			local matrix = operation.matrix
-			local qubit = operation.indices[1]
-			
-			self:applySingleQubit(matrix, qubit)
-		end
-	end
-end
-
-function module:GetMultiMatrix()
-
-	local operations = self:GetMultiOperations()
-
-	local qubits = #self.qubits
-	if #operations == 0 then
-		local tensSize = 2^qubits
-		local identity = Matrices.Identity(tensSize) --creates an identity matrix the correct size for updating the state vector
-
-		return identity
-	else
-
-		local matrix = operations[1].matrix:ExpandGate(operations[1], qubits) 
-		local t = tick()
-		if #operations > 1 then
-			for i = 1, #operations - 1 do
-				local gate = operations[i + 1]
-
-				matrix = gate.matrix:ExpandGate(gate, qubits) * matrix --Expanded Gate * Matrix, remember as correct order next time
-			end
-		end
-
-		return matrix
-	end
-end
-
-function module:GetCircuitMatrix() --for updatestatevector()
-	local t = tick()
-	local tensMatrix = self:GetTensorMatrix()
-
-	local multiMatrix = self:GetMultiMatrix()
-
-	local circuitMatrix = multiMatrix * tensMatrix --optimize this to the mooooonn
+function module:UpdateStateVector()
 	
-	return circuitMatrix
+	for _, operation in ipairs(self.gates) do
+
+		local matrix = operation.matrix
+		local indices = operation.indices
+
+		if #indices == 1 then
+
+			self:applySingleQubit(
+				matrix,
+				indices[1]
+			)
+
+		else
+
+			self:applyMultiQubit(
+				matrix,
+				indices
+			)
+
+		end
+	end
+	self.gates = {}
 end
 
 function module:run() --simpler name
