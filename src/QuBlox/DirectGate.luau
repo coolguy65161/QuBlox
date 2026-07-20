@@ -27,7 +27,7 @@ function module:CNOT(indices)
 
 	local controlMask = 2^(control-1)
 	local targetMask = 2^(target-1)
-
+	
 	for index = 0, size-1 do
 		-- control = 1
 		-- target = 0
