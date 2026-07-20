@@ -69,7 +69,6 @@ function module:results(shots)
 	local chanceTable = {} --like qiskit outputs the bit string and how many shots
 	
 	for i = 1, shots do
-		self:ResetClassicalBits()
 		--resets the state to the old state vector so it can do the same thing
 		--without caching the whole matrix
 		
@@ -79,29 +78,6 @@ function module:results(shots)
 
 	return chanceTable
 
-	--this old code is unoptimized but i might need it in the future
-	
-	--[[local oldStateVector = CloneMatrix(self.state)
-	local qubits = self.qubits
-
-	local chanceTable = {} --like qiskit outputs the bit string and how many shots
-	for i = 1, shots do
-		self:ResetClassicalBits()
-		
-		--resets the state to the old state vector so it can do the same thing
-		--without caching the whole matrix
-		self.state = CloneMatrix(oldStateVector) 
-		
-		local bitstring = ''
-		for i = 1, qubits do
-			self:measure(i, i) --measures and outputs to output bit with same index
-			local bit = self:ReadClassicalBits(i)
-	
-			bitstring = bitstring .. bit --makes big endian display order
-		end
-		chanceTable[bitstring] = (chanceTable[bitstring] or 0) + 1
-	end
-	return chanceTable--]]
 end
 
 local function NumberToBits(number, qubits)
@@ -477,35 +453,37 @@ end
 --im not entirely sure what i was doing this and it works but i will try hard to explain
 function module:measure(qubitIndex, clbitIndex)
 
-	local amplitudes = self.state
-	local qubitCount = self.qubits
+	local stateBuffer = self.state.matrix.buffer
+	local size = self.state.matrix.rows
+	local qubits = self.qubits
 
-	local probabilities = { --initializes probabilities
+	local probabilities = {
 		[0] = 0,
 		[1] = 0
 	}
 
+	local bitShift = qubits - qubitIndex
+
 	-- calculate probabilities
-	for i = 1, amplitudes.rows do
-		local stateIndex = i - 1 --actual index of the state
+	for i = 0, size - 1 do
+		
+		local bit = bit32.band(
+			bit32.rshift(i, bitShift),
+			1
+		)
 
-		local bit = math.floor( --gets the bit associated with the index? bitstring? idk
-			stateIndex / 2^(qubitCount - qubitIndex)
-		) % 2
+		local real, imag = BufferMatrix.GetStateOpt(
+			stateBuffer,
+			i + 1
+		)
 
-		local real, imag = amplitudes:Get(i, 1) --gets the real and imaginary part from the statevector
+		local probability = real * real + imag * imag
 
-		local probability = real^2 + imag^2 
-
-		if bit == 0 then
-			probabilities[0] += probability
-		else
-			probabilities[1] += probability
-		end
+		probabilities[bit] += probability
 	end
 
 
-	-- choose measurement result
+	-- choose result
 	local random = math.random()
 	local result
 
@@ -516,45 +494,70 @@ function module:measure(qubitIndex, clbitIndex)
 	end
 
 
-	-- collapse state
-	for i = 1, amplitudes.rows do
-		local stateIndex = i - 1 
+	-- collapse
+	local magnitude = 0
 
-		local bit = math.floor(
-			stateIndex / 2^(qubitCount - qubitIndex)
-		) % 2
+	for i = 0, size - 1 do
+
+		local bit = bit32.band(
+			bit32.rshift(i, bitShift),
+			1
+		)
 
 		if bit ~= result then
-			amplitudes:Set(i, 1, 0, 0) --collapses here
+
+			BufferMatrix.SetStateOpt(
+				stateBuffer,
+				i + 1,
+				0,
+				0
+			)
+
+		else
+
+			local real, imag = BufferMatrix.GetStateOpt(
+				stateBuffer,
+				i + 1
+			)
+
+			magnitude += real * real + imag * imag
 		end
 	end
 
-	--im not sure what this is for entirely
-	local magnitude = 0
 
-	for i = 1, amplitudes.rows do
-		local real, imag = amplitudes:Get(i, 1)
+	-- normalize
+	local normalizer = math.sqrt(magnitude)
 
-		magnitude += real^2 + imag^2
-	end
+	for i = 0, size - 1 do
 
-
-	local normalizer = math.sqrt(magnitude) --getting the distance of real and imag part
-
-
-	for i = 1, amplitudes.rows do
-		local real, imag = amplitudes:Get(i, 1) --
-
-		amplitudes:Set(
-			i,
-			1,
-			real / normalizer, --normalizes the statevector here, not sure why this is needed
-			imag / normalizer
+		local bit = bit32.band(
+			bit32.rshift(i, bitShift),
+			1
 		)
+
+		if bit == result then
+
+			local real, imag = BufferMatrix.GetStateOpt(
+				stateBuffer,
+				i + 1
+			)
+
+			BufferMatrix.SetStateOpt(
+				stateBuffer,
+				i + 1,
+				real / normalizer,
+				imag / normalizer
+			)
+
+		end
 	end
 
 
-	self.clbits[clbitIndex] = tostring(result)
+	-- save classical bit
+	if clbitIndex then
+		self.clbits[clbitIndex] = result
+	end
+
 
 	return result
 end
