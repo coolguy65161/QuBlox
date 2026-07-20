@@ -70,7 +70,6 @@ function module:results(shots)
 	
 	for i = 1, shots do
 		self:ResetClassicalBits()
-
 		--resets the state to the old state vector so it can do the same thing
 		--without caching the whole matrix
 		
@@ -122,7 +121,8 @@ function module:CacheMeasure(cache)
 
 	local random = math.random()
 
-	for _, prob in ipairs(probabilities) do
+	for index, prob in ipairs(probabilities) do
+
 		if random < prob[2] then
 			return table.concat(
 				NumberToBits(prob[1]-1, qubits),
@@ -147,6 +147,7 @@ function module:CacheStateProbabilites()
 
 	--calculate total probability
 	for i = 1, 2^qubit do
+	
 		local real, imag = self.state:Get(i, 1)
 		local prob = real^2 + imag^2
 
@@ -183,7 +184,7 @@ function module:applySingleQubit(gate, qubit)
 	local g12r, g12i = gate:Get(1,2)
 	local g21r, g21i = gate:Get(2,1)
 	local g22r, g22i = gate:Get(2,2)
-	
+
 	for i = 0, size-1, step*2 do
 
 		for j = 0, step-1 do
@@ -345,7 +346,7 @@ end
 function module:UpdateStateVector()
 
 	for _, operation in ipairs(self.gates) do
-		task.wait()
+
 		local matrix = operation.matrix
 		local indices = operation.indices
 
