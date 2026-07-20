@@ -1,5 +1,17 @@
 local module = {}
 local BufferMatrix = require(script.Parent.Matrices.BufferMatrix)
+
+local Settings = require(script.Parent.Settings)
+local T = Settings.Throttling
+local T_IT = Settings.Throttling_Iterations
+local function Throttling(index)
+	if T then
+		if index % T_IT == 0 then
+			task.wait()
+		end
+	end
+end
+
 local function SwapState(buf, a, b)
 	local indexA = (a - 1) * 16
 	local indexB = (b - 1) * 16
@@ -31,6 +43,7 @@ function module:CNOT(indices)
 	for index = 0, size-1 do
 		-- control = 1
 		-- target = 0
+		Throttling(index)
 		if bit32.band(index, controlMask) ~= 0
 			and bit32.band(index, targetMask) == 0 then
 
@@ -66,7 +79,7 @@ function module:CCNOT(indices)
 	
 
 	for index = 0, size-1 do
-
+		Throttling(index)
 		-- same for CNOT but checking two
 		if bit32.band(index, control1Mask) ~= 0 and bit32.band(index, control2Mask) ~= 0 then
 			local swapIndex = bit32.bxor(index, targetMask)
