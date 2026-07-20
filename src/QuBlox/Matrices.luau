@@ -53,17 +53,6 @@ function module:Size()
 	return matrix.rows, matrix.columns
 end
 
---not buffer'd not needed anyway
-function module:Column(column) 
-	local matrix = self.matrix
-	local elements = {}
-	for row = 1, #matrix do
-		local element = matrix[row][column]
-		table.insert(elements,element)
-	end
-	return elements
-end
-
 function module.CreateMatrix(x, y)
 	local buf = BufferMatrix.CreateBuffer(x, y)
 	return module.new(buf)
@@ -156,50 +145,6 @@ function module.__mul(a, b)
 	warn("unrecognized type")
 end
 
-function module:Tensor(other)
-
-	local selfRows, selfColumns = self:Size()
-	local otherRows, otherColumns = other:Size()
-
-	local result = module.CreateMatrix(
-		selfRows * otherRows,
-		selfColumns * otherColumns
-	)
-
-	for i = 1, selfRows do
-		for j = 1, selfColumns do
-
-			local scalarReal, scalarImag = self:Get(i, j)
-
-			for k = 1, otherRows do
-				local row = (i - 1) * otherRows + k
-
-				for l = 1, otherColumns do
-					local col = (j - 1) * otherColumns + l
-
-					local otherReal, otherImag = other:Get(k, l)
-
-					local real, imag = Complex.multiply(
-						scalarReal,
-						scalarImag,
-						otherReal,
-						otherImag
-					)
-
-					result:Set(
-						row,
-						col,
-						real,
-						imag
-					)
-				end
-			end
-		end
-	end
-
-	return result
-end
-
 local function NumberToBits(number, qubits)
 	local bits = {}
 
@@ -220,24 +165,8 @@ local function BitsToNumber(bits)
 	return number
 end
 --not buffer
-function module.Identity(size) -- creates identity of any size
-	local matrix = {}
 
-	for row = 1, size do
-		matrix[row] = {}
-
-		for column = 1, size do
-			if row == column then
-				matrix[row][column] = 1
-			else
-				matrix[row][column] = 0
-			end
-		end
-	end
-
-	return module.new(matrix)
-end
-local function CloneMatrix(matrix) 
+function module:CloneMatrix(matrix) 
 	local new = BufferMatrix.CreateBuffer(matrix.rows, matrix.columns)
 
 	buffer.copy(
@@ -249,69 +178,6 @@ local function CloneMatrix(matrix)
 	)
 
 	return module.new(new)
-end
-
-function module:ExpandGate(gate, qubitCount) --i know this is necessary, still figuring out the logic behind it
-
-	local size = 2^qubitCount
-
-	local expanded = module.CreateMatrix(size,size)
-	
-	local indices = table.clone(gate.indices)
-	local amount = #indices
-	local matrix = CloneMatrix(gate.matrix)
-	for inputState = 0, size-1 do
-
-		-- convert number to bits
-		local bits = NumberToBits(inputState, qubitCount)
-
-
-		-- get only the qubits the gate touches
-		local smallInput = {}
-
-		for _, index in indices do
-			table.insert(
-				smallInput,
-				bits[index]
-			)
-		end
-
-		local smallIndex = BitsToNumber(smallInput)
-
-		for outputSmall = 0, 2^(amount)-1 do
-
-			local real, imag = matrix:Get(
-				outputSmall + 1,
-				smallIndex + 1
-			)
-
-			if real ~= 0 or imag ~= 0 then
-
-				local outputBits = table.clone(bits)
-
-				local replacement =
-					NumberToBits(
-						outputSmall,
-						amount
-					)
-
-				for i,index in indices do
-					outputBits[index] = replacement[i]
-				end
-
-				local outputState = BitsToNumber(outputBits)
-
-				expanded:Set(
-					outputState + 1,
-					inputState + 1,
-					real,
-					imag
-				)
-			end
-		end
-	end
-
-	return expanded
 end
 
 ------ BUFFERS ------
