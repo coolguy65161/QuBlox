@@ -16,6 +16,16 @@ local Gates = require(script.Gates)
 local Complex = require(script.Complex)
 local BufferMatrix = require(script.Matrices.BufferMatrix)
 
+local Settings = require(script.Settings)
+local T = Settings.Throttling
+local T_IT = Settings.Throttling_Iterations
+local function Throttling(index)
+	if T then
+		if index % T_IT == 0 then
+			task.wait()
+		end
+	end
+end
 function module.new()
 	local circuit = {}
 	setmetatable(circuit, module)
@@ -63,7 +73,6 @@ end
 function module:results(shots)
 	local t = tick()
 	self:run() -- update state vector
-	print('Time to update the state vector:', tick() - t)
 	local probCache = self:CacheStateProbabilites()
 
 	local chanceTable = {} --like qiskit outputs the bit string and how many shots
@@ -71,7 +80,7 @@ function module:results(shots)
 	for i = 1, shots do
 		--resets the state to the old state vector so it can do the same thing
 		--without caching the whole matrix
-		
+	
 		local bitstring = string.reverse(self:CacheMeasure(probCache))
 		chanceTable[bitstring] = (chanceTable[bitstring] or 0) + 1
 	end
@@ -123,7 +132,7 @@ function module:CacheStateProbabilites()
 
 	--calculate total probability
 	for i = 1, 2^qubit do
-	
+		Throttling(i)
 		local real, imag = self.state:Get(i, 1)
 		local prob = real^2 + imag^2
 
@@ -162,9 +171,9 @@ function module:applySingleQubit(gate, qubit)
 	local g22r, g22i = gate:Get(2,2)
 
 	for i = 0, size-1, step*2 do
-
+		Throttling(i)
 		for j = 0, step-1 do
-
+			
 			local index1 = i+j+1
 			local index2 = index1+step
 
@@ -245,7 +254,7 @@ function module:applyMultiQubit(gate, qubits)
 	local output = {}
 
 	for i = 0, stateSize-1 do
-	
+		Throttling(i)
 		if bit32.band(i, mask) == 0 then
 
 			local baseIndex = i + 1
