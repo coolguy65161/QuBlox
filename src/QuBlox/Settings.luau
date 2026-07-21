@@ -1,6 +1,8 @@
 local module = {}
 	module.Throttling = true
-	--Throttling for amount less than 1e6 (1 million) can cause 2x less performance!
-	-- For >50 fps its recommended to turn on throttling but keep iterations below 5e6
+
+	-- For >50 fps its recommended to turn on throttling but keep iterations below 3e5 (300,000)
+	-- Anything below 1e6 (1,000,000) will cause performance to be 2x slower and will continue to
+	-- drop performance significantly below that
 	module.Throttling_Iterations = 4e6
 return module
