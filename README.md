@@ -64,26 +64,29 @@ Expected output:
 
 ---
 
-# QuBlox v1.1 - Latest Version
+# QuBlox v2.0 - Latest Version
 
 ## Changes
-- Updated Statevector creation
-- Replaced Circuit.qubits with empty table objects for now
-- Limit is now 9 qubits due to matrix multiplication optimizations
-- Removed Conjugate Transpose
-- Matrix multiplication and gate expansion are soon to be obsolete
-- Vector.Qubit(0 or 1) now returns {}
-
+- Optimized Statevector Calculations
+- Added direct amplitude modification
+- Added throttling to prevent script exhaustion and frame drops
+- Raised qubit limit to >20 qubits
+- For qubit amounts under 15, 5000+ gates can be done under a minute
+  
 ## Benchmarks
 Example:
 - 7-qubit GHZ state
 - 500,000 measurements
-- ~1.5 seconds
+- ~747 milliseconds
 
 Example:
 - 5-qubit GHZ state
 - 1,000 measurements
-- ~24.6 milliseconds
+- ~1.1 milliseconds
 
+Example:
+- 26-qubit GHZ state (max possible qubits for Roblox)
+- 1,000 measurements
+- ~102 seconds
 ## Additional Information
 > Roblox took down the original QuBlox v1.0, and other reuploads. For now you will have to download directly from the release page at [Release QuBlox v1.1 · coolguy65161/QuBlox](https://github.com/coolguy65161/QuBlox/releases/tag/v1.1)
