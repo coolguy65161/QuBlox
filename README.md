@@ -89,4 +89,4 @@ Example:
 - 1,000 measurements
 - ~102 seconds
 ## Additional Information
-> Roblox took down the original QuBlox v1.0, and other reuploads. For now you will have to download directly from the release page at [Release QuBlox v1.1 · coolguy65161/QuBlox](https://github.com/coolguy65161/QuBlox/releases/tag/v1.1)
+> Roblox took down the original QuBlox v1.0, and other reuploads. For now you will have to download directly from the release page at [Release QuBlox v2.0 · coolguy65161/QuBlox](https://github.com/coolguy65161/QuBlox/releases/tag/v2.0)
