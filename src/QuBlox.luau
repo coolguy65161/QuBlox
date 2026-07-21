@@ -1,3 +1,5 @@
+--!native
+
 --[[
 A lot of this code was made late at night so comments were made after
 creating the functions, so some might not make sense
@@ -19,13 +21,34 @@ local BufferMatrix = require(script.Matrices.BufferMatrix)
 local Settings = require(script.Settings)
 local T = Settings.Throttling
 local T_IT = Settings.Throttling_Iterations
-local function Throttling(index)
+local counter = 0 
+
+local function Throttling(add)
 	if T then
-		if index % T_IT == 0 then
+		counter = counter + add
+		if counter >= T_IT then
+			counter = 0
 			task.wait()
+			return true
+			
 		end
+		
 	end
 end
+
+local function GetStateOpt(buf, row)
+	local index = (row - 1) * 16
+	local real = buffer.readf64(buf, index)
+	local imag = buffer.readf64(buf, index + 8)
+
+	return real, imag
+end
+local function SetStateOpt(buf, row, real, imag)
+	local index = (row - 1) * 16
+	buffer.writef64(buf, index, real)
+	buffer.writef64(buf, index + 8, imag)
+end
+
 function module.new()
 	local circuit = {}
 	setmetatable(circuit, module)
@@ -48,12 +71,21 @@ function module.Circuit(qubits, clbits)
 	for i = 1, clbits do
 		table.insert(circuit.clbits, '0')
 	end
-	
+
 	circuit.state = module.StateVector(circuit.qubits)
 
 	return circuit
 end
 
+------ GARBAGE COLLECTION ------
+
+function module:DestroyCircuit()
+	self.state.matrix.buffer = nil
+	self.state = nil
+	self.qubits = nil
+	self.clbits = nil
+	self.gates = nil
+end
 ------ TENSOR & CIRCUIT CALC ------
 
 local function CloneMatrix(matrix) --im not sure if this is entirely optimal, i will look into it in the future
@@ -73,14 +105,15 @@ end
 function module:results(shots)
 	local t = tick()
 	self:run() -- update state vector
+
 	local probCache = self:CacheStateProbabilites()
 
 	local chanceTable = {} --like qiskit outputs the bit string and how many shots
-	
+
 	for i = 1, shots do
 		--resets the state to the old state vector so it can do the same thing
 		--without caching the whole matrix
-	
+		Throttling(1)
 		local bitstring = string.reverse(self:CacheMeasure(probCache))
 		chanceTable[bitstring] = (chanceTable[bitstring] or 0) + 1
 	end
@@ -100,40 +133,79 @@ local function NumberToBits(number, qubits)
 	return bits
 end
 
-function module:CacheMeasure(cache)
+function module:CacheMeasure(cache) 
 	local qubits = self.qubits
 	local probabilities = cache or self:CacheStateProbabilites()
 
 	local random = math.random()
 
-	for index, prob in ipairs(probabilities) do
+	local along = random * 2^qubits + 1
+	local startIndex = math.floor(along)
 
-		if random < prob[2] then
-			return table.concat(
-				NumberToBits(prob[1]-1, qubits),
-				''
-			)
+	if startIndex < 1 then
+		startIndex = 1
+	elseif startIndex > #probabilities then
+		startIndex = #probabilities
+	end
+
+	local at = probabilities[startIndex][2]
+
+	local step, stop
+	if random < at then
+		step = -1
+		stop = 1
+	else
+		step = 1
+		stop = #probabilities
+	end
+
+	for index = startIndex, stop, step do
+		local prob = probabilities[index]
+		Throttling(100)
+
+		if step == 1 then
+			if random < prob[2] then
+				return table.concat(
+					NumberToBits(prob[1] - 1, qubits),
+					''
+				)
+			end
+		else
+			if random >= prob[2] then
+				local targetProb = probabilities[index + 1] or probabilities[1]
+				return table.concat(
+					NumberToBits(targetProb[1] - 1, qubits),
+					''
+				)
+			end
 		end
 	end
 
-	-- floating point fallback
+	if step == -1 then
+		local firstProb = probabilities[1]
+		return table.concat(
+			NumberToBits(firstProb[1] - 1, qubits),
+			''
+		)
+	end
+
 	local last = probabilities[#probabilities]
 	return table.concat(
-		NumberToBits(last[1]-1, qubits),
+		NumberToBits(last[1] - 1, qubits),
 		''
 	)
 end
-function module:CacheStateProbabilites()
+function module:CacheStateProbabilites() --stores prob as chances instead of direct state
 	local epsilon = 1e-10
 
 	local qubit = self.qubits
 	local probabilities = {}
 	local total = 0
-
+	local state = self.state.matrix.buffer
 	--calculate total probability
 	for i = 1, 2^qubit do
-		Throttling(i)
-		local real, imag = self.state:Get(i, 1)
+		Throttling(100)
+		local real, imag = GetStateOpt(state, i)
 		local prob = real^2 + imag^2
 
 		if prob >= epsilon then
@@ -158,11 +230,10 @@ end
 
 --- OPERATIONS ------
 
-
 --thanks for this code as well
 function module:applySingleQubit(gate, qubit)
 	local size = self.state.matrix.rows
-
+	local buf = self.state.matrix.buffer
 	local step = 2^(qubit-1)
 
 	local g11r, g11i = gate:Get(1,1)
@@ -171,38 +242,30 @@ function module:applySingleQubit(gate, qubit)
 	local g22r, g22i = gate:Get(2,2)
 
 	for i = 0, size-1, step*2 do
-		Throttling(i)
+
+		Throttling(1) 
+
 		for j = 0, step-1 do
-			
-			local index1 = i+j+1
-			local index2 = index1+step
+			local index1 = i + j + 1
+			local index2 = index1 + step
 
-			local ar, ai = self.state:Get(index1, 1)
-			local br, bi = self.state:Get(index2, 1)
+			local ar, ai = GetStateOpt(buf, index1)
+			local br, bi = GetStateOpt(buf, index2)
 
-			-- g11*a
-			local a1r, a1i = Complex.multiply(g11r, g11i, ar, ai)
-			-- g12*b
-			local b1r, b1i = Complex.multiply(g12r, g12i, br, bi)
+			local a1r = (g11r * ar) - (g11i * ai)
+			local a1i = (g11r * ai) + (g11i * ar)
 
-			-- g21*a
-			local a2r, a2i = Complex.multiply(g21r, g21i, ar, ai)
-			-- g22*b
-			local b2r, b2i = Complex.multiply(g22r, g22i, br, bi)
+			local b1r = (g12r * br) - (g12i * bi)
+			local b1i = (g12r * bi) + (g12i * br)
 
-			self.state:Set(
-				index1,
-				1,
-				a1r + b1r,
-				a1i + b1i
-			)
+			local a2r = (g21r * ar) - (g21i * ai)
+			local a2i = (g21r * ai) + (g21i * ar)
 
-			self.state:Set(
-				index2,
-				1,
-				a2r + b2r,
-				a2i + b2i
-			)
+			local b2r = (g22r * br) - (g22i * bi)
+			local b2i = (g22r * bi) + (g22i * br)
+
+			SetStateOpt(buf, index2, a1r + b1r, a1i + b1i)
+			SetStateOpt(buf, index2, 1, a2r + b2r, a2i + b2i)
 		end
 	end
 end
@@ -249,20 +312,18 @@ function module:applyMultiQubit(gate, qubits)
 		mask = bit32.bor(mask, bit32.lshift(1, q - 1))
 	end
 
-	-- temporary storage
+
 	local input = {}
 	local output = {}
 
 	for i = 0, stateSize-1 do
-		Throttling(i)
+		Throttling(1)
 		if bit32.band(i, mask) == 0 then
 
 			local baseIndex = i + 1
 
-			-- Get affected amplitudes
 			for j = 0, gateSize-1 do
 
-				-- Note we pass orderedQubits here instead of qubits
 				local stateIndex = getIndex(
 					baseIndex-1,
 					orderedQubits,
@@ -277,7 +338,6 @@ function module:applyMultiQubit(gate, qubits)
 				}
 			end
 
-			-- Matrix multiply gate * vector
 			for row = 1, gateSize do
 				local realSum = 0
 				local imagSum = 0
@@ -329,24 +389,26 @@ end
 
 ------ STATE VECTOR CALCULATIONS ------
 function module:UpdateStateVector()
-
+	local benchmarks = {}
 	for _, operation in ipairs(self.gates) do
 
 		local matrix = operation.matrix
 		local indices = operation.indices
-
+		local t = tick()
 		if #indices == 1 then
-
-			self:applySingleQubit(
-				matrix,
-				indices[1]
-			)
-
+			if DirectGate[operation.gateName] then
+				DirectGate[operation.gateName](self, indices)
+			else
+				self:applySingleQubit(
+					matrix,
+					indices[1]
+				)
+			end
 		else
 			if DirectGate[operation.gateName] then
 				DirectGate[operation.gateName](self, indices)
 			else
-				
+
 				self:applyMultiQubit(
 					matrix,
 					indices
@@ -354,7 +416,9 @@ function module:UpdateStateVector()
 			end
 
 		end
+		benchmarks[operation.gateName] = (benchmarks[operation.gateName] or 0) + tick() - t
 	end
+
 	self.gates = {}
 end
 
@@ -462,7 +526,7 @@ end
 --im not entirely sure what i was doing this and it works but i will try hard to explain
 function module:measure(qubitIndex, clbitIndex)
 
-	local stateBuffer = self.state.matrix.buffer
+--[[	local stateBuffer = self.state.matrix.buffer
 	local size = self.state.matrix.rows
 	local qubits = self.qubits
 
@@ -576,7 +640,7 @@ function module:ReadClassicalBits(index)
 end
 
 function module:ResetClassicalBits()
-	self.clbits = table.create(#self.clbits,'0')
+	self.clbits = table.create(#self.clbits,'0')]]
 end
 
 
